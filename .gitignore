@@ -1,0 +1,15 @@
+# ISO build output
+out/
+*.iso
+*.img
+
+# Temporary build files
+airootfs/tmp/
+airootfs/var/cache/pacman/pkg/
+airootfs/var/log/
+
+# System-specific files
+*.swp
+*.swo
+.DS_Store
+
