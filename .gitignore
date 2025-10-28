@@ -1,14 +1,21 @@
-# ISO build output
+# ISO output and build temp directories
+work/
 out/
 *.iso
 *.img
 
-# Temporary build files
-airootfs/tmp/
-airootfs/var/cache/pacman/pkg/
+# Pacman cache & logs
+airootfs/var/cache/
+airootfs/var/lib/pacman/sync/
 airootfs/var/log/
 
-# System-specific files
+# Sensitive system files
+airootfs/etc/shadow
+airootfs/etc/gshadow
+airootfs/etc/passwd
+airootfs/etc/group
+
+# Backup or editor files
 *.swp
 *.swo
 .DS_Store
