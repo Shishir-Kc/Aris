@@ -126,16 +126,3 @@ xdg-utils
 xfsprogs
 xl2tpd
 zsh
-
-# ARIS DESKTOP :
-
-# Desktop environment (choose one)
-plasma-meta
-sddm
-
-# Networking tools
-networkmanager
-
-
-fastfetch
-
