@@ -24,3 +24,9 @@ file_permissions=(
   ["/usr/local/bin/Installation_guide"]="0:0:755"
   ["/usr/local/bin/livecd-sound"]="0:0:755"
 )
+
+run_late_command() {
+    useradd -m -G wheel -s /bin/bash aris
+    echo "aris:aris" | chpasswd -R /
+}
+

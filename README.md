@@ -1,2 +1,2 @@
 # Aris
-A prototype Os 
+This is an Arch Linux based ISO.

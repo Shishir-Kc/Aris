@@ -20,3 +20,4 @@ airootfs/etc/group
 *.swo
 .DS_Store
 
+GEMINI.md
