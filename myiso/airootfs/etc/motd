@@ -1,0 +1,11 @@
+Welcome to Aris OS - Live/Install Medium
+
+To install Aris OS, launch the Calamares installer from the application menu
+or by running: sudo calamares
+
+For Wi-Fi, authenticate to the wireless network using the iwctl utility.
+For mobile broadband (WWAN) modems, connect with the mmcli utility.
+Ethernet, WLAN and WWAN interfaces using DHCP should work automatically.
+
+Root password is not set (use sudo).
+Live user: liveuser / password: aris
