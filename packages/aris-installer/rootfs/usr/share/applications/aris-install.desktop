@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Install Aris
+Comment=Install Aris to this computer
+Exec=aris-welcome --install
+Icon=aris
+Terminal=false
+Categories=System;
+Keywords=installer;install;setup;
