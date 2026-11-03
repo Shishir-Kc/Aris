@@ -1,0 +1,68 @@
+# Aris live/install medium. One package per line.
+
+# --- Aris
+aris-desktop
+aris-installer
+firefox
+
+# --- Base, kernel, firmware, microcode
+base
+linux
+linux-firmware
+linux-firmware-marvell
+sof-firmware
+amd-ucode
+intel-ucode
+mkinitcpio
+mkinitcpio-archiso
+
+# --- Boot (required by the bios.syslinux / uefi.systemd-boot boot modes)
+syslinux
+memtest86+
+memtest86+-efi
+edk2-shell
+efibootmgr
+
+# --- Disks and filesystems
+arch-install-scripts
+btrfs-progs
+cryptsetup
+dosfstools
+e2fsprogs
+exfatprogs
+f2fs-tools
+ntfs-3g
+xfsprogs
+gptfdisk
+parted
+lvm2
+mdadm
+nvme-cli
+smartmontools
+hdparm
+usbutils
+
+# --- Networking
+networkmanager
+wpa_supplicant
+iw
+wireless-regdb
+usb_modeswitch
+openssh
+rsync
+reflector
+
+# --- Virtual machine guests
+qemu-guest-agent
+virtualbox-guest-utils-nox
+open-vm-tools
+hyperv
+
+# --- Everyday tools
+sudo
+nano
+vim
+less
+man-db
+man-pages
+git
