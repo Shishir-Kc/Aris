@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480" width="640" height="480">
+  <!-- Syslinux (BIOS) boot menu background. The menu is drawn over the
+       lower half, so the mark sits in the top third. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#151821"/>
+      <stop offset="1" stop-color="#0a0b10"/>
+    </linearGradient>
+    <linearGradient id="mark" gradientUnits="userSpaceOnUse" x1="40" y1="220" x2="216" y2="22">
+      <stop offset="0" stop-color="#5ce1c6"/>
+      <stop offset="1" stop-color="#9d8cff"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="480" fill="url(#bg)"/>
+  <g transform="translate(288 26) scale(0.25)">
+    <g fill="none" stroke="url(#mark)" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M40 220 L106 86" stroke-width="26"/>
+      <path d="M150 86 L216 220" stroke-width="26"/>
+      <path d="M92 168 H164" stroke-width="18"/>
+    </g>
+    <path fill="url(#mark)" d="M128 22 C131 44 140 53 162 56 C140 59 131 68 128 90 C125 68 116 59 94 56 C116 53 125 44 128 22 Z"/>
+  </g>
+</svg>
