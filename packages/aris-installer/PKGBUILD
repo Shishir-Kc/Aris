@@ -1,0 +1,24 @@
+# Maintainer: Shishir KC <kc.dev.py@gmail.com>
+#
+# The Aris installer and live-session welcome. Only shipped on the live medium.
+# Files under rootfs/ are installed verbatim.
+
+pkgname=aris-installer
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Aris installer (aris-install) and live session welcome"
+arch=('any')
+url="https://github.com/Shishir-Kc/Aris"
+license=('LicenseRef-unspecified')
+depends=(
+  'aris-desktop' 'bash' 'gum' 'jq' 'kitty' 'sudo' 'curl' 'networkmanager'
+  'arch-install-scripts' 'util-linux' 'cryptsetup'
+  'btrfs-progs' 'dosfstools' 'e2fsprogs' 'xkeyboard-config'
+)
+
+package() {
+  cp -r --no-preserve=ownership,mode "$startdir/rootfs/." "$pkgdir/"
+  find "$pkgdir" -type d -exec chmod 755 {} +
+  find "$pkgdir" -type f -exec chmod 644 {} +
+  chmod 755 "$pkgdir"/usr/bin/*
+}
