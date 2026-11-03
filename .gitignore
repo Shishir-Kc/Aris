@@ -1,23 +1,14 @@
-# ISO output and build temp directories
-work/
-out/
+# Build outputs (packages, ISO, mkarchiso work dir, VM disks and test runs)
+/build/
+/out/
 *.iso
 *.img
+*.qcow2
 
-# Pacman cache & logs
-airootfs/var/cache/
-airootfs/var/lib/pacman/sync/
-airootfs/var/log/
-
-# Sensitive system files
-airootfs/etc/shadow
-airootfs/etc/gshadow
-airootfs/etc/passwd
-airootfs/etc/group
-
-# Backup or editor files
+# Editor / OS noise
 *.swp
 *.swo
 .DS_Store
+__pycache__/
 
 GEMINI.md
