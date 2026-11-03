@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# aris-keybinds — searchable list of every described Hyprland keybinding.
+set -euo pipefail
+
+# modmask bits: SHIFT 1, CAPS 2, CTRL 4, ALT 8, MOD2 16, MOD3 32, SUPER 64, MOD5 128
+hyprctl binds -j | jq -r '
+  def mods:
+    [ (if (. / 64 | floor) % 2 == 1 then "SUPER" else empty end),
+      (if (. / 4  | floor) % 2 == 1 then "CTRL"  else empty end),
+      (if (. / 8  | floor) % 2 == 1 then "ALT"   else empty end),
+      (if  . % 2 == 1                then "SHIFT" else empty end) ];
+  def keyname:
+    if   . == "mouse:272" then "Left drag"
+    elif . == "mouse:273" then "Right drag"
+    elif . == "mouse_down" then "Scroll down"
+    elif . == "mouse_up" then "Scroll up"
+    elif . == "grave" then "`"
+    elif . == "slash" then "/"
+    else . end;
+  .[]
+  | select(.has_description)
+  | ((.modmask | mods) + [(.key | keyname)] | join(" + ")) as $combo
+  | "\($combo)\t\(.description)"
+' | awk -F'\t' '!seen[$0]++ { printf "%-30s %s\n", $1, $2 }' |
+  fuzzel --dmenu --prompt "Keys ❯ " --width 70 --lines 18 \
+    --font "JetBrainsMono Nerd Font:size=11" >/dev/null || true
