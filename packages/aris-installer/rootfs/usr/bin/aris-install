@@ -1,0 +1,776 @@
+#!/usr/bin/env bash
+#
+# aris-install — install Aris to a disk.
+#
+#   aris-install                         interactive installer
+#   aris-install --config FILE [--yes]   unattended: FILE assigns the ARIS_*
+#                                        answers listed below (bash syntax)
+#
+# The chosen disk is erased completely. Layout (GPT):
+#   UEFI  1 GiB EFI system partition (/boot, FAT32) + root
+#   BIOS  1 MiB BIOS boot + 1 GiB /boot (ext4)       + root
+# Root is Btrfs (subvolumes @ @home @log @pkg @snapshots) or ext4, optionally
+# inside LUKS2. Boot loader: systemd-boot (UEFI) or GRUB (BIOS). Swap: zram.
+
+set -Eeuo pipefail
+shopt -s nullglob
+
+readonly VERSION=0.1.0
+readonly TARGET=/mnt/aris
+readonly LOG=/var/log/aris-install.log
+readonly LOCAL_REPO=/opt/aris/repo
+readonly CRYPT_NAME=arisroot
+readonly MIN_DISK_GIB=20
+
+# Answers. Each prompt fills one; anything pre-set (environment or --config)
+# is not asked.
+: "${ARIS_DISK:=}"           # whole disk, e.g. /dev/nvme0n1
+: "${ARIS_FS:=}"             # btrfs | ext4
+: "${ARIS_ENCRYPT:=}"        # yes | no
+: "${ARIS_LUKS_PASSWORD:=}"
+: "${ARIS_FULLNAME:=}"
+: "${ARIS_USER:=}"
+: "${ARIS_PASSWORD:=}"
+: "${ARIS_HOSTNAME:=}"
+: "${ARIS_TIMEZONE:=}"       # e.g. Europe/Berlin
+: "${ARIS_LOCALE:=}"         # e.g. en_US.UTF-8
+: "${ARIS_XKB_LAYOUT:=}"     # e.g. us, de, gb
+: "${ARIS_XKB_VARIANT:=}"
+: "${ARIS_NVIDIA:=}"         # yes | no (asked only when an NVIDIA GPU is present)
+: "${ARIS_EXTRA_PACKAGES:=}" # space separated
+: "${ARIS_KERNEL_PARAMS:=}"  # extra kernel parameters, e.g. "console=ttyS0"
+
+UNATTENDED=0
+ASSUME_YES=0
+PHASE=questions # becomes "install" once the disk is about to be touched
+FIRMWARE=
+PART_ESP= PART_BOOT= PART_ROOT= ROOT_DEV=
+PACMAN_CONF=
+MOUNTED=0
+
+# ---------------------------------------------------------------- output --
+# All status output goes to stderr: stdout is reserved for prompt answers.
+
+log() { printf '[%(%F %T)T] %s\n' -1 "$*" >>"$LOG"; }
+step() {
+  printf '\n' >&2
+  gum style --bold --foreground "#9d8cff" "==> $*" >&2
+  log "==> $*"
+}
+info() { gum style --foreground "#5ce1c6" "    $*" >&2; }
+warn() {
+  gum style --foreground "#f5c26b" "    ! $*" >&2
+  log "WARN: $*"
+}
+die() {
+  gum style --bold --foreground "#ff6b81" "    ✗ $*" >&2
+  log "ERROR: $*"
+  exit 1
+}
+
+# Run quietly, logging the command and its output.
+run() {
+  log "+ $*"
+  "$@" >>"$LOG" 2>&1
+}
+
+# Same, inside the new system.
+in_target() {
+  log "+ (target) $*"
+  arch-chroot "$TARGET" "$@" >>"$LOG" 2>&1
+}
+
+banner() {
+  gum style --border rounded --border-foreground "#9d8cff" --padding "1 4" --margin "1 2" \
+    --align center "$(gum style --bold --foreground "#9d8cff" '✦  A R I S')" \
+    "" "Installer $VERSION" >&2
+}
+
+# ------------------------------------------------------------ lifecycle --
+
+cleanup() {
+  if ((MOUNTED)); then
+    umount -R "$TARGET" 2>/dev/null || true
+  fi
+  [[ -e /dev/mapper/$CRYPT_NAME ]] && cryptsetup close "$CRYPT_NAME" 2>/dev/null || true
+  [[ -n $PACMAN_CONF ]] && rm -f "$PACMAN_CONF"
+  return 0
+}
+
+on_error() {
+  local code=$? line=$1
+  trap - ERR
+  if [[ $PHASE == questions ]]; then
+    # A prompt was cancelled (Esc / Ctrl+C) before any disk was touched.
+    printf '\n' >&2
+    gum style --foreground "#f5c26b" "Installation cancelled. Nothing was changed." >&2
+    exit 130
+  fi
+  log "FAILED (exit $code) at line $line"
+  printf '\n' >&2
+  gum style --bold --foreground "#ff6b81" "Installation failed (exit $code, line $line). Last log lines:" >&2
+  tail -n 25 "$LOG" >&2 || true
+  printf '\nFull log: %s\n' "$LOG" >&2
+  exit "$code"
+}
+
+usage() {
+  sed -n '3,14p' "$0" | sed 's/^# \{0,1\}//'
+  exit "${1:-0}"
+}
+
+parse_args() {
+  while (($#)); do
+    case "$1" in
+      -c | --config)
+        [[ -r ${2:-} ]] || die "config file not readable: ${2:-}"
+        # shellcheck source=/dev/null
+        source "$2"
+        UNATTENDED=1
+        shift 2
+        ;;
+      -y | --yes) ASSUME_YES=1 && shift ;;
+      -h | --help) usage 0 ;;
+      *) usage 2 ;;
+    esac
+  done
+}
+
+# ------------------------------------------------------------ detection --
+
+detect_firmware() {
+  if [[ -d /sys/firmware/efi/efivars ]]; then FIRMWARE=uefi; else FIRMWARE=bios; fi
+}
+
+cpu_microcode() {
+  case "$(grep -m1 -oP '^vendor_id\s*:\s*\K\S+' /proc/cpuinfo || true)" in
+    GenuineIntel) echo intel-ucode ;;
+    AuthenticAMD) echo amd-ucode ;;
+  esac
+}
+
+# PCI vendor IDs of display controllers (class 0x03xxxx).
+gpu_vendors() {
+  local dev
+  for dev in /sys/bus/pci/devices/*; do
+    if [[ $(<"$dev/class") == 0x03* ]]; then cat "$dev/vendor"; fi
+  done | sort -u
+}
+
+has_nvidia() { [[ $'\n'"$(gpu_vendors)"$'\n' == *$'\n0x10de\n'* ]]; }
+
+# The disk the live medium was booted from; never offered as a target.
+boot_disk() {
+  local src parent
+  src="$(findmnt -no SOURCE /run/archiso/bootmnt 2>/dev/null)" || return 0
+  parent="$(lsblk -no PKNAME "$src" 2>/dev/null | head -n1)"
+  if [[ -n $parent ]]; then echo "/dev/$parent"; else echo "$src"; fi
+}
+
+# "path<TAB>bytes<TAB>model" for every writable whole disk.
+candidate_disks() {
+  local skip
+  skip="$(boot_disk)"
+  lsblk -J -b -d -p -o NAME,SIZE,TYPE,RO,MODEL | jq -r --arg skip "$skip" '
+    .blockdevices[]
+    | select(.type == "disk" and (.ro | not))
+    | select(.name | test("^/dev/(zram|loop|ram)") | not)
+    | select(.name != $skip)
+    | "\(.name)\t\(.size)\t\(.model // "" | gsub("^\\s+|\\s+$"; ""))"'
+}
+
+online() { curl -fsS --max-time 8 -o /dev/null https://geo.mirror.pkgbuild.com/; }
+
+# ------------------------------------------------------------- prompts --
+
+# prompt_password HEADER -> prints the password
+prompt_password() {
+  local a b
+  while true; do
+    a="$(gum input --password --header "$1" --placeholder "Password")"
+    if [[ -z $a ]]; then
+      warn "The password can't be empty."
+      continue
+    fi
+    b="$(gum input --password --header "Type it again" --placeholder "Password")"
+    if [[ $a == "$b" ]]; then
+      printf '%s' "$a"
+      return
+    fi
+    warn "The passwords didn't match. Try again."
+  done
+}
+
+xkb_layouts() {
+  awk '/^! layout/ { on = 1; next } /^!/ { on = 0 } on && NF {
+         name = $1; $1 = ""; sub(/^ +/, ""); printf "%-10s %s\n", name, $0 }' \
+    /usr/share/X11/xkb/rules/base.lst
+}
+
+# Layout chosen earlier in the live session (aris-welcome), else "us".
+live_xkb_layout() {
+  sed -nE 's/.*Option[[:space:]]+"XkbLayout"[[:space:]]+"([^"]*)".*/\1/p' \
+    /etc/X11/xorg.conf.d/00-keyboard.conf 2>/dev/null | head -n1 | grep . || echo us
+}
+
+timezones() {
+  echo UTC
+  awk '!/^#/ && NF >= 3 { print $3 }' /usr/share/zoneinfo/zone1970.tab | sort -u
+}
+
+utf8_locales() {
+  echo en_US.UTF-8
+  awk '$2 == "UTF-8" { print $1 }' /usr/share/i18n/SUPPORTED | grep -vx en_US.UTF-8
+}
+
+ask_network() {
+  online && return
+  ((UNATTENDED)) && die "No internet connection. Aris downloads its packages during install."
+  while ! online; do
+    warn "No internet connection. Aris downloads its packages during install."
+    gum confirm "Open the network setup (Wi-Fi) now?" || die "An internet connection is required."
+    nmtui || true
+  done
+}
+
+ask_keyboard() {
+  [[ -n $ARIS_XKB_LAYOUT ]] && return
+  local current choice
+  current="$(live_xkb_layout)"
+  choice="$(xkb_layouts | gum filter --header "Keyboard layout" --placeholder "Search layouts…" \
+    --value "$current" --height 14)"
+  ARIS_XKB_LAYOUT="${choice%% *}"
+}
+
+ask_disk() {
+  if [[ -z $ARIS_DISK ]]; then
+    local -a rows=()
+    local name size model
+    while IFS=$'\t' read -r name size model; do
+      rows+=("$(printf '%-16s %9s   %s' "$name" "$(numfmt --to=iec-i --suffix=B "$size")" "${model:-unknown}")")
+    done < <(candidate_disks)
+    ((${#rows[@]})) || die "No disk found to install to."
+    local choice
+    choice="$(printf '%s\n' "${rows[@]}" | gum choose --header "Install Aris on which disk? It will be ERASED.")"
+    ARIS_DISK="${choice%% *}"
+  fi
+  validate_disk "$ARIS_DISK"
+}
+
+validate_disk() {
+  local disk=$1 size
+  [[ -b $disk ]] || die "$disk is not a block device."
+  [[ $(lsblk -dno TYPE "$disk") == disk ]] || die "$disk is not a whole disk."
+  [[ $disk != "$(boot_disk)" ]] || die "$disk is the Aris installation medium."
+  if lsblk -nrpo MOUNTPOINTS "$disk" | grep -q .; then
+    die "$disk has mounted partitions. Unmount them first."
+  fi
+  if swapon --show=NAME --noheadings | grep -q "^$disk"; then
+    die "$disk is in use as swap. Run 'swapoff -a' first."
+  fi
+  if lsblk -nrpo TYPE "$disk" | grep -qE '^(crypt|lvm|raid)'; then
+    die "$disk has open LUKS/LVM/RAID volumes. Close them first."
+  fi
+  size="$(lsblk -bdno SIZE "$disk")"
+  ((size >= MIN_DISK_GIB * 1024 ** 3)) || die "$disk is smaller than ${MIN_DISK_GIB} GiB."
+}
+
+ask_filesystem() {
+  if [[ -z $ARIS_FS ]]; then
+    local choice
+    choice="$(gum choose --header "Filesystem" \
+      "Btrfs  (recommended: compression, subvolumes, snapshot-ready)" \
+      "ext4   (simple and proven)")"
+    ARIS_FS="$(tr '[:upper:]' '[:lower:]' <<<"${choice%% *}")"
+  fi
+  [[ $ARIS_FS == btrfs || $ARIS_FS == ext4 ]] || die "ARIS_FS must be btrfs or ext4."
+}
+
+ask_encryption() {
+  if [[ -z $ARIS_ENCRYPT ]]; then
+    if gum confirm "Encrypt the disk? (asks for a passphrase at every boot)" --default=false; then
+      ARIS_ENCRYPT=yes
+    else
+      ARIS_ENCRYPT=no
+    fi
+  fi
+  [[ $ARIS_ENCRYPT == yes || $ARIS_ENCRYPT == no ]] || die "ARIS_ENCRYPT must be yes or no."
+  if [[ $ARIS_ENCRYPT == yes && -z $ARIS_LUKS_PASSWORD ]]; then
+    ((UNATTENDED)) && die "ARIS_LUKS_PASSWORD is required when ARIS_ENCRYPT=yes."
+    ARIS_LUKS_PASSWORD="$(prompt_password "Disk encryption passphrase")"
+  fi
+}
+
+valid_username() {
+  [[ $1 =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || return 1
+  [[ $1 == aris ]] && return 0 # the live user; free on the new system
+  ! getent passwd "$1" >/dev/null && [[ $1 != greeter ]]
+}
+
+valid_hostname() { [[ $1 =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$ ]]; }
+
+ask_user() {
+  if [[ -z $ARIS_USER ]]; then
+    [[ -n $ARIS_FULLNAME ]] || ARIS_FULLNAME="$(gum input --header "Your name" --placeholder "Ada Lovelace")"
+    local suggestion
+    suggestion="$(tr '[:upper:]' '[:lower:]' <<<"${ARIS_FULLNAME%% *}" | tr -cd 'a-z0-9_-')"
+    while true; do
+      ARIS_USER="$(gum input --header "Username" --placeholder "lowercase, e.g. ada" --value "$suggestion")"
+      valid_username "$ARIS_USER" && break
+      warn "Use lowercase letters, digits, '-' or '_', starting with a letter (and not a system account)."
+    done
+  fi
+  valid_username "$ARIS_USER" || die "Invalid username: $ARIS_USER"
+  if [[ -z $ARIS_PASSWORD ]]; then
+    ((UNATTENDED)) && die "ARIS_PASSWORD is required."
+    ARIS_PASSWORD="$(prompt_password "Password for $ARIS_USER (also used for sudo)")"
+  fi
+}
+
+ask_hostname() {
+  if [[ -z $ARIS_HOSTNAME ]]; then
+    while true; do
+      ARIS_HOSTNAME="$(gum input --header "Computer name (hostname)" --value aris)"
+      valid_hostname "$ARIS_HOSTNAME" && break
+      warn "Letters, digits and '-' only, at most 63 characters."
+    done
+  fi
+  valid_hostname "$ARIS_HOSTNAME" || die "Invalid hostname: $ARIS_HOSTNAME"
+}
+
+ask_timezone() {
+  [[ -n $ARIS_TIMEZONE ]] || ARIS_TIMEZONE="$(timezones | gum filter --header "Time zone" --placeholder "Search, e.g. Kathmandu" --height 14)"
+  [[ -f /usr/share/zoneinfo/$ARIS_TIMEZONE ]] || die "Unknown time zone: $ARIS_TIMEZONE"
+}
+
+ask_locale() {
+  [[ -n $ARIS_LOCALE ]] || ARIS_LOCALE="$(utf8_locales | gum filter --header "Language and formats (locale)" --placeholder "Search, e.g. en_GB" --height 14)"
+  grep -q "^$ARIS_LOCALE UTF-8\$" /usr/share/i18n/SUPPORTED || die "Unsupported locale: $ARIS_LOCALE"
+}
+
+ask_nvidia() {
+  has_nvidia || {
+    ARIS_NVIDIA=no
+    return
+  }
+  if [[ -z $ARIS_NVIDIA ]]; then
+    if ((UNATTENDED)); then
+      ARIS_NVIDIA=no
+    elif gum confirm "NVIDIA GPU found. Install the NVIDIA driver? (GTX 16xx / RTX 20xx and newer)"; then
+      ARIS_NVIDIA=yes
+    else
+      ARIS_NVIDIA=no
+    fi
+  fi
+}
+
+confirm_plan() {
+  local enc="no"
+  [[ $ARIS_ENCRYPT == yes ]] && enc="yes (LUKS2)"
+  gum style --border rounded --border-foreground "#2a2e3d" --padding "1 3" --margin "1 2" \
+    "$(gum style --bold --foreground "#9d8cff" "Ready to install")" "" \
+    "Disk         $ARIS_DISK  ($(lsblk -dno SIZE "$ARIS_DISK" | tr -d ' '))" \
+    "Firmware     ${FIRMWARE^^}" \
+    "Filesystem   $ARIS_FS" \
+    "Encryption   $enc" \
+    "User         $ARIS_USER${ARIS_FULLNAME:+ ($ARIS_FULLNAME)}" \
+    "Hostname     $ARIS_HOSTNAME" \
+    "Time zone    $ARIS_TIMEZONE" \
+    "Locale       $ARIS_LOCALE" \
+    "Keyboard     $ARIS_XKB_LAYOUT${ARIS_XKB_VARIANT:+ ($ARIS_XKB_VARIANT)}" >&2
+  gum style --bold --foreground "#ff6b81" --margin "0 2" \
+    "Everything on $ARIS_DISK will be permanently erased." >&2
+  ((ASSUME_YES)) && return
+  ((UNATTENDED)) && die "Unattended install needs --yes to erase $ARIS_DISK."
+  gum confirm "Erase $ARIS_DISK and install Aris?" --default=false --affirmative "Erase and install" --negative "Cancel" ||
+    {
+      info "Cancelled. Nothing was changed."
+      exit 0
+    }
+}
+
+# ------------------------------------------------------------- install --
+
+# /dev/sda -> /dev/sda1, /dev/nvme0n1 -> /dev/nvme0n1p1
+part() {
+  if [[ $ARIS_DISK =~ [0-9]$ ]]; then echo "${ARIS_DISK}p$1"; else echo "${ARIS_DISK}$1"; fi
+}
+
+wait_for() {
+  local dev
+  for dev in "$@"; do
+    for _ in {1..20}; do
+      [[ -b $dev ]] && break
+      sleep 0.25
+    done
+    [[ -b $dev ]] || die "$dev did not appear."
+  done
+}
+
+prepare_live() {
+  PHASE=install
+  step "Preparing"
+  # Leftovers from an earlier, failed attempt.
+  umount -R "$TARGET" 2>/dev/null || true
+  if [[ -e /dev/mapper/$CRYPT_NAME ]]; then cryptsetup close "$CRYPT_NAME" || true; fi
+  # The live medium initialises its pacman keyring at boot; make sure it's done.
+  if systemctl cat pacman-init.service >/dev/null 2>&1; then
+    run systemctl start pacman-init.service
+  fi
+  info "Refreshing the Arch Linux signing keys"
+  run pacman -Sy --needed --noconfirm archlinux-keyring
+}
+
+partition_disk() {
+  step "Partitioning $ARIS_DISK"
+  # GPT type GUIDs: ESP, BIOS boot, Linux filesystem, Linux root (x86-64).
+  local esp=C12A7328-F81F-11D2-BA4B-00A0C93EC93B
+  local biosboot=21686148-6449-6E6F-744E-656564454649
+  local linux=0FC63DAF-8483-4772-8E79-3D69D8477DE4
+  local root=4F68BCE3-E8CD-4DB1-96E7-FBCAF984B709
+  local layout
+
+  if [[ $FIRMWARE == uefi ]]; then
+    layout="label: gpt
+size=1GiB, type=$esp, name=\"EFI system\"
+type=$root, name=\"Aris\""
+    PART_ESP="$(part 1)"
+    PART_ROOT="$(part 2)"
+  else
+    layout="label: gpt
+size=1MiB, type=$biosboot, name=\"BIOS boot\"
+size=1GiB, type=$linux, name=\"Aris boot\"
+type=$root, name=\"Aris\""
+    PART_BOOT="$(part 2)"
+    PART_ROOT="$(part 3)"
+  fi
+
+  run wipefs --all --force "$ARIS_DISK"
+  log "+ sfdisk layout: ${layout//$'\n'/ | }"
+  sfdisk --wipe always --wipe-partitions always "$ARIS_DISK" <<<"$layout" >>"$LOG" 2>&1
+  run udevadm settle
+  wait_for "$PART_ROOT" ${PART_ESP:+"$PART_ESP"} ${PART_BOOT:+"$PART_BOOT"}
+}
+
+format_partitions() {
+  step "Creating filesystems"
+  if [[ $FIRMWARE == uefi ]]; then
+    run mkfs.fat -F 32 -n ARIS "$PART_ESP"
+  else
+    run mkfs.ext4 -F -q -L aris-boot "$PART_BOOT"
+  fi
+
+  ROOT_DEV=$PART_ROOT
+  if [[ $ARIS_ENCRYPT == yes ]]; then
+    info "Encrypting (LUKS2)"
+    printf '%s' "$ARIS_LUKS_PASSWORD" |
+      run cryptsetup luksFormat --type luks2 --batch-mode --label aris-luks --key-file - "$PART_ROOT"
+    printf '%s' "$ARIS_LUKS_PASSWORD" |
+      run cryptsetup open --allow-discards --key-file - "$PART_ROOT" "$CRYPT_NAME"
+    ROOT_DEV=/dev/mapper/$CRYPT_NAME
+  fi
+
+  case $ARIS_FS in
+    btrfs) run mkfs.btrfs -f -q -L aris "$ROOT_DEV" ;;
+    ext4) run mkfs.ext4 -F -q -L aris "$ROOT_DEV" ;;
+  esac
+}
+
+mount_target() {
+  step "Mounting"
+  mkdir -p "$TARGET"
+  MOUNTED=1
+  if [[ $ARIS_FS == btrfs ]]; then
+    local opts=noatime,compress=zstd:1 sv
+    run mount "$ROOT_DEV" "$TARGET"
+    for sv in @ @home @log @pkg @snapshots; do
+      run btrfs subvolume create "$TARGET/$sv"
+    done
+    run umount "$TARGET"
+    run mount -o "$opts,subvol=@" "$ROOT_DEV" "$TARGET"
+    mkdir -p "$TARGET"/{home,var/log,var/cache/pacman/pkg,.snapshots}
+    run mount -o "$opts,subvol=@home" "$ROOT_DEV" "$TARGET/home"
+    run mount -o "$opts,subvol=@log" "$ROOT_DEV" "$TARGET/var/log"
+    run mount -o "$opts,subvol=@pkg" "$ROOT_DEV" "$TARGET/var/cache/pacman/pkg"
+    run mount -o "$opts,subvol=@snapshots" "$ROOT_DEV" "$TARGET/.snapshots"
+  else
+    run mount -o noatime "$ROOT_DEV" "$TARGET"
+  fi
+
+  mkdir -p "$TARGET/boot"
+  if [[ $FIRMWARE == uefi ]]; then
+    run mount -o umask=0077 "$PART_ESP" "$TARGET/boot"
+  else
+    run mount "$PART_BOOT" "$TARGET/boot"
+  fi
+}
+
+target_packages() {
+  local -a pkgs=(
+    base linux linux-firmware sof-firmware
+    sudo nano vim less man-db man-pages
+    e2fsprogs dosfstools
+    aris-desktop firefox
+  )
+  local ucode
+  ucode="$(cpu_microcode)"
+  [[ -n $ucode ]] && pkgs+=("$ucode")
+  [[ $ARIS_FS == btrfs ]] && pkgs+=(btrfs-progs)
+  [[ $ARIS_ENCRYPT == yes ]] && pkgs+=(cryptsetup)
+  [[ $FIRMWARE == bios ]] && pkgs+=(grub)
+
+  local vendor
+  while read -r vendor; do
+    case $vendor in
+      0x8086) pkgs+=(vulkan-intel intel-media-driver) ;;
+      0x1002) pkgs+=(vulkan-radeon) ;;
+    esac
+  done < <(gpu_vendors)
+  [[ $ARIS_NVIDIA == yes ]] && pkgs+=(nvidia-open nvidia-utils)
+
+  case "$(systemd-detect-virt 2>/dev/null || true)" in
+    oracle) pkgs+=(virtualbox-guest-utils) ;;
+    vmware) pkgs+=(open-vm-tools) ;;
+    kvm | qemu) pkgs+=(qemu-guest-agent) ;;
+  esac
+
+  # shellcheck disable=SC2206 # intentional word splitting of the list
+  [[ -n $ARIS_EXTRA_PACKAGES ]] && pkgs+=($ARIS_EXTRA_PACKAGES)
+  printf '%s\n' "${pkgs[@]}"
+}
+
+install_packages() {
+  step "Installing packages (this takes a while)"
+  PACMAN_CONF="$(mktemp)"
+  if [[ -f $LOCAL_REPO/aris.db ]]; then
+    # The Aris packages ship on the medium; put that repo ahead of Arch's.
+    awk -v repo="$LOCAL_REPO" '
+      /^\[core\]/ && !done { print "[aris]\nSigLevel = Optional TrustAll\nServer = file://" repo "\n"; done = 1 }
+      { print }' /etc/pacman.conf >"$PACMAN_CONF"
+  else
+    cp /etc/pacman.conf "$PACMAN_CONF"
+  fi
+
+  local -a pkgs
+  mapfile -t pkgs < <(target_packages)
+  log "packages: ${pkgs[*]}"
+  info "${#pkgs[@]} packages plus dependencies"
+  pacstrap -K -C "$PACMAN_CONF" "$TARGET" "${pkgs[@]}" 2>&1 | tee -a "$LOG"
+}
+
+kernel_cmdline() {
+  local cmdline
+  if [[ $ARIS_ENCRYPT == yes ]]; then
+    cmdline="rd.luks.name=$(blkid -s UUID -o value "$PART_ROOT")=$CRYPT_NAME rd.luks.options=discard root=/dev/mapper/$CRYPT_NAME"
+  else
+    cmdline="root=UUID=$(blkid -s UUID -o value "$ROOT_DEV")"
+  fi
+  [[ $ARIS_FS == btrfs ]] && cmdline+=" rootflags=subvol=@"
+  cmdline+=" rw quiet loglevel=3 zswap.enabled=0"
+  [[ $ARIS_NVIDIA == yes ]] && cmdline+=" nvidia_drm.modeset=1"
+  [[ -n $ARIS_KERNEL_PARAMS ]] && cmdline+=" $ARIS_KERNEL_PARAMS"
+  echo "$cmdline"
+}
+
+configure_base() {
+  step "Configuring the system"
+  genfstab -U "$TARGET" >>"$TARGET/etc/fstab"
+
+  in_target ln -sf "/usr/share/zoneinfo/$ARIS_TIMEZONE" /etc/localtime
+  in_target hwclock --systohc || warn "Could not set the hardware clock."
+
+  local locale
+  for locale in "$ARIS_LOCALE" en_US.UTF-8; do
+    sed -i "s/^#\(${locale//./\\.} UTF-8\)/\1/" "$TARGET/etc/locale.gen"
+  done
+  in_target locale-gen
+  echo "LANG=$ARIS_LOCALE" >"$TARGET/etc/locale.conf"
+
+  # Console keymap: same name as the XKB layout where one exists.
+  local keymap=$ARIS_XKB_LAYOUT
+  [[ $keymap == gb ]] && keymap=uk
+  [[ -n $(find /usr/share/kbd/keymaps -name "$keymap.map.gz" -print -quit) ]] || keymap=us
+  echo "KEYMAP=$keymap" >"$TARGET/etc/vconsole.conf"
+
+  # Desktop keyboard (read by Hyprland via the Aris defaults).
+  mkdir -p "$TARGET/etc/X11/xorg.conf.d"
+  cat >"$TARGET/etc/X11/xorg.conf.d/00-keyboard.conf" <<EOF
+# Written by aris-install. Same format as 'localectl set-x11-keymap'.
+Section "InputClass"
+        Identifier "system-keyboard"
+        MatchIsKeyboard "on"
+        Option "XkbLayout" "$ARIS_XKB_LAYOUT"
+        Option "XkbVariant" "$ARIS_XKB_VARIANT"
+EndSection
+EOF
+
+  echo "$ARIS_HOSTNAME" >"$TARGET/etc/hostname"
+  cat >"$TARGET/etc/hosts" <<EOF
+127.0.0.1   localhost
+::1         localhost
+127.0.1.1   $ARIS_HOSTNAME.localdomain $ARIS_HOSTNAME
+EOF
+}
+
+configure_users() {
+  step "Creating user $ARIS_USER"
+  in_target useradd -m -G wheel -s /bin/bash -c "$ARIS_FULLNAME" "$ARIS_USER"
+  printf '%s:%s\n' "$ARIS_USER" "$ARIS_PASSWORD" | arch-chroot "$TARGET" chpasswd
+  in_target passwd --lock root
+  install -m 0440 /dev/stdin "$TARGET/etc/sudoers.d/10-wheel" <<<'%wheel ALL=(ALL:ALL) ALL'
+  printf '\n# Aris shell defaults (prompt, aliases, history)\n[[ -r /usr/share/aris/bash/bashrc ]] && . /usr/share/aris/bash/bashrc\n' \
+    >>"$TARGET/home/$ARIS_USER/.bashrc"
+}
+
+configure_boot() {
+  step "Installing the boot loader"
+  local hooks="base systemd autodetect microcode modconf kms keyboard sd-vconsole block"
+  local modules=""
+  [[ $ARIS_ENCRYPT == yes ]] && hooks+=" sd-encrypt"
+  hooks+=" filesystems fsck"
+  if [[ $ARIS_NVIDIA == yes ]]; then
+    # Load the NVIDIA modules early; drop kms so nouveau stays out.
+    modules="nvidia nvidia_modeset nvidia_uvm nvidia_drm"
+    hooks="${hooks/ kms/}"
+  fi
+  cat >"$TARGET/etc/mkinitcpio.conf.d/aris.conf" <<EOF
+# Written by aris-install.
+MODULES=($modules)
+HOOKS=($hooks)
+EOF
+  in_target mkinitcpio -P
+
+  local cmdline
+  cmdline="$(kernel_cmdline)"
+  log "kernel cmdline: $cmdline"
+
+  if [[ $FIRMWARE == uefi ]]; then
+    in_target bootctl install --esp-path=/boot
+    cat >"$TARGET/boot/loader/loader.conf" <<EOF
+default aris.conf
+timeout 3
+console-mode max
+editor no
+EOF
+    cat >"$TARGET/boot/loader/entries/aris.conf" <<EOF
+title   Aris
+linux   /vmlinuz-linux
+initrd  /initramfs-linux.img
+options $cmdline
+EOF
+    if [[ -f $TARGET/boot/initramfs-linux-fallback.img ]]; then
+      cat >"$TARGET/boot/loader/entries/aris-fallback.conf" <<EOF
+title   Aris (fallback initramfs)
+linux   /vmlinuz-linux
+initrd  /initramfs-linux-fallback.img
+options $cmdline
+EOF
+    fi
+    in_target systemctl enable systemd-boot-update.service
+  else
+    local grub_cmdline="" default_cmdline="quiet loglevel=3 zswap.enabled=0"
+    if [[ $ARIS_ENCRYPT == yes ]]; then
+      grub_cmdline="rd.luks.name=$(blkid -s UUID -o value "$PART_ROOT")=$CRYPT_NAME rd.luks.options=discard"
+    fi
+    [[ $ARIS_NVIDIA == yes ]] && default_cmdline+=" nvidia_drm.modeset=1"
+    [[ -n $ARIS_KERNEL_PARAMS ]] && default_cmdline+=" $ARIS_KERNEL_PARAMS"
+    sed -i \
+      -e 's|^#\?GRUB_DISTRIBUTOR=.*|GRUB_DISTRIBUTOR="Aris"|' \
+      -e 's|^#\?GRUB_TIMEOUT=.*|GRUB_TIMEOUT=3|' \
+      -e "s|^#\\?GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT=\"$default_cmdline\"|" \
+      -e "s|^#\\?GRUB_CMDLINE_LINUX=.*|GRUB_CMDLINE_LINUX=\"$grub_cmdline\"|" \
+      "$TARGET/etc/default/grub"
+    in_target grub-install --target=i386-pc "$ARIS_DISK"
+    in_target grub-mkconfig -o /boot/grub/grub.cfg
+  fi
+}
+
+configure_desktop() {
+  step "Setting up the desktop"
+  cat >"$TARGET/etc/greetd/config.toml" <<'EOF'
+# Written by aris-install. Login screen: tuigreet, starting Hyprland.
+[terminal]
+vt = 1
+
+[default_session]
+command = "tuigreet --time --remember --remember-session --asterisks --greeting 'Welcome to Aris' --cmd start-hyprland --theme 'border=magenta;title=magenta;greet=cyan;prompt=cyan;time=magenta;action=cyan;button=magenta;input=white'"
+user = "greeter"
+EOF
+
+  local -a services=(NetworkManager.service bluetooth.service greetd.service
+    systemd-timesyncd.service fstrim.timer power-profiles-daemon.service)
+  case "$(systemd-detect-virt 2>/dev/null || true)" in
+    oracle) services+=(vboxservice.service) ;;
+    vmware) services+=(vmtoolsd.service) ;;
+  esac
+  in_target systemctl enable "${services[@]}"
+
+  # Keep networks joined in the live session (e.g. Wi-Fi) on the new system.
+  local conn copied=0
+  for conn in /etc/NetworkManager/system-connections/*; do
+    install -m 600 "$conn" "$TARGET/etc/NetworkManager/system-connections/"
+    copied=1
+  done
+  ((copied)) && info "Copied saved network connections"
+  return 0
+}
+
+finish() {
+  step "Finishing"
+  install -m 600 "$LOG" "$TARGET/var/log/aris-install.log"
+  sync
+  run umount -R "$TARGET"
+  MOUNTED=0
+  [[ -e /dev/mapper/$CRYPT_NAME ]] && run cryptsetup close "$CRYPT_NAME"
+
+  gum style --border rounded --border-foreground "#5ce1c6" --padding "1 4" --margin "1 2" --align center \
+    "$(gum style --bold --foreground "#5ce1c6" "Aris is installed")" "" \
+    "Remove the installation medium, then reboot." \
+    "Log in as $ARIS_USER." >&2
+  log "Installation complete."
+
+  if ((!UNATTENDED)) && gum confirm "Reboot now?"; then
+    systemctl reboot
+  fi
+}
+
+main() {
+  if ((EUID != 0)); then
+    exec sudo --preserve-env=TERM "$0" "$@"
+  fi
+  : >"$LOG"
+  parse_args "$@"
+  chmod 600 "$LOG"
+  trap 'on_error $LINENO' ERR
+  trap cleanup EXIT
+
+  banner
+  log "aris-install $VERSION (unattended=$UNATTENDED)"
+  detect_firmware
+  info "Firmware: ${FIRMWARE^^}"
+
+  ask_network
+  ask_keyboard
+  ask_disk
+  ask_filesystem
+  ask_encryption
+  ask_user
+  ask_hostname
+  ask_timezone
+  ask_locale
+  ask_nvidia
+  confirm_plan
+
+  prepare_live
+  partition_disk
+  format_partitions
+  mount_target
+  install_packages
+  configure_base
+  configure_users
+  configure_boot
+  configure_desktop
+  finish
+}
+
+main "$@"
