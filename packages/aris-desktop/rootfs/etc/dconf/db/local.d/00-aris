@@ -1,0 +1,15 @@
+# Aris desktop defaults for GTK/libadwaita apps and the settings portal.
+# Users override these per-account (gsettings / nwg-look).
+
+[org/gnome/desktop/interface]
+color-scheme='prefer-dark'
+gtk-theme='adw-gtk3-dark'
+icon-theme='Papirus-Dark'
+cursor-theme='Adwaita'
+cursor-size=24
+font-name='Inter 11'
+document-font-name='Inter 11'
+monospace-font-name='JetBrainsMono Nerd Font 11'
+
+[org/gnome/desktop/wm/preferences]
+button-layout=':'
