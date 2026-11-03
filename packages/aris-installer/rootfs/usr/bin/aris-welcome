@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# aris-welcome [--install] — welcome window of the Aris live session.
+set -euo pipefail
+
+# Always run inside our own floating terminal (see the aris-welcome window rule).
+if [[ -z ${ARIS_WELCOME_TERM:-} ]]; then
+  export ARIS_WELCOME_TERM=1
+  class=aris.welcome
+  [[ ${1:-} == --install ]] && class=aris.installer
+  exec kitty --class "$class" --title "Aris" -e "$0" "$@"
+fi
+
+banner() {
+  clear
+  gum style --border rounded --border-foreground "#9d8cff" --padding "1 4" --margin "1 2" --align center \
+    "$(gum style --bold --foreground "#9d8cff" '✦  Welcome to Aris')" "" \
+    "This is the live session: nothing is installed yet." \
+    "Try things out, then install when you're ready."
+}
+
+install() {
+  sudo aris-install || true
+  gum style --faint --margin "1 2" "Press Enter to return to the welcome menu."
+  read -r _
+}
+
+keyboard() {
+  local choice layout
+  choice="$(awk '/^! layout/ { on = 1; next } /^!/ { on = 0 } on && NF {
+               name = $1; $1 = ""; sub(/^ +/, ""); printf "%-10s %s\n", name, $0 }' \
+    /usr/share/X11/xkb/rules/base.lst |
+    gum filter --header "Keyboard layout" --placeholder "Search layouts…" --height 14)" || return 0
+  layout="${choice%% *}"
+  # Same file the installer pre-selects from and Hyprland reads on reload.
+  sudo install -D -m644 /dev/stdin /etc/X11/xorg.conf.d/00-keyboard.conf <<EOF
+Section "InputClass"
+        Identifier "system-keyboard"
+        MatchIsKeyboard "on"
+        Option "XkbLayout" "$layout"
+EndSection
+EOF
+  hyprctl reload >/dev/null
+  gum style --foreground "#5ce1c6" --margin "0 2" "Keyboard layout set to $layout."
+  sleep 1
+}
+
+if [[ ${1:-} == --install ]]; then
+  install
+  exit 0
+fi
+
+while true; do
+  banner
+  choice="$(gum choose --header "What would you like to do?" \
+    "Install Aris" \
+    "Connect to a network" \
+    "Keyboard layout" \
+    "Open a terminal" \
+    "Close")" || exit 0
+  case "$choice" in
+    "Install Aris") install ;;
+    "Connect to a network") nmtui || true ;;
+    "Keyboard layout") keyboard ;;
+    "Open a terminal") setsid -f kitty >/dev/null 2>&1 ;;
+    "Close") exit 0 ;;
+  esac
+done
