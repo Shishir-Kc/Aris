@@ -1,0 +1,4 @@
+post_remove() {
+  echo ":: /usr/lib/os-release still identifies as Aris."
+  echo ":: Reinstall the 'filesystem' package to restore Arch's version."
+}
