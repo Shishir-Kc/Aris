@@ -1,0 +1,54 @@
+# Maintainer: Shishir KC <kc.dev.py@gmail.com>
+#
+# The Aris desktop: Hyprland session defaults, branding, helper tools and the
+# package set that makes up an Aris install. Files under rootfs/ are installed
+# verbatim (rootfs/usr/bin/x -> /usr/bin/x).
+
+pkgname=aris-desktop
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Aris desktop: Hyprland session defaults, branding and tools"
+arch=('any')
+url="https://github.com/Shishir-Kc/Aris"
+license=('LicenseRef-unspecified')
+install=aris-desktop.install
+depends=(
+  # Compositor and session
+  'hyprland' 'xdg-desktop-portal-hyprland' 'xdg-desktop-portal-gtk'
+  'hyprpolkitagent' 'hyprlock' 'hypridle' 'qt5-wayland' 'qt6-wayland'
+  'greetd' 'greetd-tuigreet'
+  # Shell: bar, notifications, launcher, wallpaper
+  'waybar' 'mako' 'libnotify' 'fuzzel' 'swaybg'
+  # Core apps
+  'kitty' 'thunar' 'gvfs' 'tumbler'
+  # Screenshots and clipboard
+  'grim' 'slurp' 'wl-clipboard' 'cliphist' 'jq'
+  # Audio, media, brightness
+  'pipewire' 'pipewire-pulse' 'pipewire-alsa' 'wireplumber' 'pavucontrol'
+  'playerctl' 'brightnessctl'
+  # Networking, Bluetooth, power
+  'networkmanager' 'network-manager-applet' 'bluez' 'bluez-utils' 'blueman'
+  'power-profiles-daemon'
+  # Look: fonts, themes, icons, cursors
+  'inter-font' 'ttf-jetbrains-mono-nerd' 'noto-fonts' 'noto-fonts-emoji'
+  'adw-gtk-theme' 'papirus-icon-theme' 'adwaita-cursors' 'dconf'
+  # Everyday shell
+  'starship' 'fastfetch' 'btop' 'bash-completion'
+  'xdg-user-dirs' 'xdg-utils' 'zram-generator'
+)
+optdepends=(
+  'nwg-look: GUI for GTK theme, font and cursor settings'
+  'satty: annotate screenshots'
+  'gnome-keyring: secret storage for browsers and editors'
+  'noto-fonts-cjk: Chinese, Japanese and Korean glyphs'
+)
+backup=('etc/systemd/zram-generator.conf')
+
+package() {
+  cp -r --no-preserve=ownership,mode "$startdir/rootfs/." "$pkgdir/"
+
+  # Normalise permissions regardless of the checkout's umask.
+  find "$pkgdir" -type d -exec chmod 755 {} +
+  find "$pkgdir" -type f -exec chmod 644 {} +
+  chmod 755 "$pkgdir"/usr/bin/* "$pkgdir"/usr/share/libalpm/scripts/*
+}
