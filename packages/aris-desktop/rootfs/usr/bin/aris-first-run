@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# aris-first-run — one-time welcome on a user's first Aris session.
+set -euo pipefail
+
+marker="${XDG_STATE_HOME:-$HOME/.local/state}/aris/first-run"
+[[ -e $marker ]] && exit 0
+mkdir -p -- "${marker%/*}"
+touch -- "$marker"
+
+xdg-user-dirs-update >/dev/null 2>&1 || true
+
+sleep 2 # let mako come up
+notify-send --icon aris --app-name Aris "Welcome to Aris" \
+  "SUPER + Space opens apps, SUPER + Return a terminal.
+SUPER + / lists every keybinding."
