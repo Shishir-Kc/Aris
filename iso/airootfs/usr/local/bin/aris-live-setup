@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Create the passwordless live user "aris" from /etc/skel. Runs at every live
+# boot (the live root is a fresh tmpfs overlay each time).
+set -euo pipefail
+id aris >/dev/null 2>&1 && exit 0
+useradd -m -u 1000 -G wheel -s /bin/bash -c "Aris Live" aris
+passwd -d aris >/dev/null
+printf '\n# Aris shell defaults\n[[ -r /usr/share/aris/bash/bashrc ]] && . /usr/share/aris/bash/bashrc\n' >>/home/aris/.bashrc
