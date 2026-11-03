@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# aris-menu power — session/power menu (SUPER + Escape).
+set -euo pipefail
+
+usage() {
+  echo "usage: aris-menu power" >&2
+  exit 2
+}
+
+dmenu() {
+  fuzzel --dmenu --prompt "$1 ❯ " --width 24 --lines "$2"
+}
+
+power() {
+  local -a entries=()
+  # The live user has no password, so locking would be a trap.
+  [[ -e /etc/aris-live ]] || entries+=($'  Lock')
+  entries+=($'  Suspend' $'  Log out' $'  Reboot' $'  Shut down')
+
+  local choice
+  choice="$(printf '%s\n' "${entries[@]}" | dmenu Power "${#entries[@]}")" || exit 0
+
+  case "$choice" in
+    *Lock) exec aris-lock ;;
+    *Suspend) exec systemctl suspend ;;
+    *"Log out") exec hyprctl dispatch 'hl.dsp.exit()' ;;
+    *Reboot) exec systemctl reboot ;;
+    *"Shut down") exec systemctl poweroff ;;
+  esac
+}
+
+case "${1:-}" in
+  power) power ;;
+  *) usage ;;
+esac
