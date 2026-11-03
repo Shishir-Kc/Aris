@@ -1,0 +1,22 @@
+# Aris interactive bash defaults (package-managed).
+# Sourced from ~/.bashrc; put your own settings after that line.
+
+[[ $- != *i* ]] && return
+
+HISTSIZE=10000
+HISTFILESIZE=20000
+HISTCONTROL=ignoreboth:erasedups
+shopt -s histappend checkwinsize
+
+alias ls='ls --color=auto'
+alias ll='ls -lh --group-directories-first'
+alias la='ls -lAh --group-directories-first'
+alias grep='grep --color=auto'
+alias ip='ip -color=auto'
+
+if command -v starship >/dev/null 2>&1; then
+  if [[ -z ${STARSHIP_CONFIG:-} && ! -e ${XDG_CONFIG_HOME:-$HOME/.config}/starship.toml ]]; then
+    export STARSHIP_CONFIG=/usr/share/aris/config/starship.toml
+  fi
+  eval "$(starship init bash)"
+fi
