@@ -1,0 +1,109 @@
+/* Aris bar defaults (package-managed). Override in ~/.config/waybar/style.css */
+
+* {
+  font-family: "Inter", "JetBrainsMono Nerd Font", sans-serif;
+  font-size: 13px;
+  min-height: 0;
+  border: none;
+  border-radius: 0;
+}
+
+window#waybar {
+  background: rgba(13, 15, 20, 0.80);
+  color: #e4e7ef;
+  border: 1px solid rgba(157, 140, 255, 0.20);
+  border-radius: 12px;
+}
+
+tooltip {
+  background: #151821;
+  border: 1px solid #2a2e3d;
+  border-radius: 8px;
+}
+
+tooltip label {
+  color: #e4e7ef;
+}
+
+#custom-aris {
+  color: #9d8cff;
+  font-size: 17px;
+  padding: 0 10px 0 14px;
+}
+
+#custom-aris:hover {
+  color: #5ce1c6;
+}
+
+#workspaces {
+  margin: 0 4px;
+}
+
+#workspaces button {
+  color: #8a91a5;
+  background: transparent;
+  padding: 0 9px;
+  margin: 5px 2px;
+  border-radius: 8px;
+  transition: none;
+}
+
+#workspaces button:hover {
+  background: rgba(157, 140, 255, 0.15);
+  box-shadow: none;
+  text-shadow: none;
+}
+
+#workspaces button.active {
+  color: #0d0f14;
+  background: linear-gradient(90deg, #9d8cff, #5ce1c6);
+  font-weight: 600;
+}
+
+#workspaces button.urgent {
+  color: #ff6b81;
+}
+
+#workspaces button.empty {
+  color: #4a5065;
+}
+
+#window {
+  color: #8a91a5;
+  padding: 0 10px;
+}
+
+#clock {
+  font-weight: 600;
+  padding: 0 12px;
+}
+
+#tray,
+#pulseaudio,
+#network,
+#bluetooth,
+#battery {
+  padding: 0 10px;
+}
+
+#pulseaudio.muted,
+#network.disconnected {
+  color: #8a91a5;
+}
+
+#battery.charging {
+  color: #7ee08a;
+}
+
+#battery.warning:not(.charging) {
+  color: #f5c26b;
+}
+
+#battery.critical:not(.charging) {
+  color: #ff6b81;
+}
+
+#custom-power {
+  color: #ff6b81;
+  padding: 0 14px 0 10px;
+}

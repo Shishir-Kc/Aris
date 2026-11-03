@@ -1,0 +1,12 @@
+# Aris live: log the live user straight into Hyprland once; after logging out,
+# tuigreet offers the session again (user "aris", empty password).
+[terminal]
+vt = 1
+
+[initial_session]
+command = "start-hyprland"
+user = "aris"
+
+[default_session]
+command = "tuigreet --time --asterisks --greeting 'Aris live session · user aris · no password' --cmd start-hyprland --theme 'border=magenta;title=magenta;greet=cyan;prompt=cyan;time=magenta;action=cyan;button=magenta;input=white'"
+user = "greeter"

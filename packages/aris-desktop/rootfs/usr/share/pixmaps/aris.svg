@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- Aris mark: an open-apex "A" with a guiding star in the gap. -->
+  <defs>
+    <linearGradient id="aris-g" gradientUnits="userSpaceOnUse" x1="40" y1="220" x2="216" y2="22">
+      <stop offset="0" stop-color="#5ce1c6"/>
+      <stop offset="1" stop-color="#9d8cff"/>
+    </linearGradient>
+  </defs>
+  <g fill="none" stroke="url(#aris-g)" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M40 220 L106 86" stroke-width="26"/>
+    <path d="M150 86 L216 220" stroke-width="26"/>
+    <path d="M92 168 H164" stroke-width="18"/>
+  </g>
+  <path fill="url(#aris-g)"
+        d="M128 22 C131 44 140 53 162 56 C140 59 131 68 128 90 C125 68 116 59 94 56 C116 53 125 44 128 22 Z"/>
+</svg>

@@ -1,0 +1,9 @@
+NAME="Aris"
+PRETTY_NAME="Aris"
+ID=aris
+ID_LIKE=arch
+BUILD_ID=rolling
+ANSI_COLOR="38;2;157;140;255"
+HOME_URL="https://github.com/Shishir-Kc/Aris"
+BUG_REPORT_URL="https://github.com/Shishir-Kc/Aris/issues"
+LOGO=aris

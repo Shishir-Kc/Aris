@@ -1,0 +1,7 @@
+// Live medium only: the passwordless live user may do anything polkit guards
+// (network settings, mounting disks, ...) without an authentication prompt.
+polkit.addRule(function (action, subject) {
+  if (subject.user == "aris") {
+    return polkit.Result.YES;
+  }
+});

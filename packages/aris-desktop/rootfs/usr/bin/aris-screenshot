@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# aris-screenshot region|window|screen — save to ~/Pictures/Screenshots and copy.
+set -euo pipefail
+
+mode="${1:-region}"
+pictures="$(xdg-user-dir PICTURES 2>/dev/null || true)"
+[[ -n $pictures && $pictures != "$HOME" ]] || pictures="$HOME/Pictures"
+dir="$pictures/Screenshots"
+mkdir -p "$dir"
+file="$dir/$(date +%Y-%m-%d_%H-%M-%S).png"
+
+case "$mode" in
+  region)
+    geometry="$(slurp -d)" || exit 0 # cancelled with Escape
+    grim -g "$geometry" "$file"
+    ;;
+  window)
+    geometry="$(hyprctl activewindow -j | jq -r 'if .at then "\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])" else empty end')"
+    [[ -n $geometry ]] || { notify-send "Screenshot" "No active window"; exit 1; }
+    grim -g "$geometry" "$file"
+    ;;
+  screen)
+    output="$(hyprctl monitors -j | jq -r '.[] | select(.focused) | .name')"
+    grim -o "$output" "$file"
+    ;;
+  *)
+    echo "usage: aris-screenshot region|window|screen" >&2
+    exit 2
+    ;;
+esac
+
+wl-copy --type image/png <"$file"
+notify-send --icon "$file" --app-name Screenshot "Screenshot saved" "${file/#$HOME/\~} — copied to clipboard"

@@ -1,0 +1,5 @@
+// Your bar. Aris defaults are included below; any option you set here wins.
+// Docs: man 5 waybar
+{
+  "include": ["/usr/share/aris/config/waybar/config.jsonc"]
+}

@@ -1,0 +1,13 @@
+# The filesystem package owns /usr/lib/os-release and resets it to Arch's on
+# every upgrade; re-apply the Aris identity afterwards.
+[Trigger]
+Type = Package
+Operation = Install
+Operation = Upgrade
+Target = filesystem
+Target = aris-desktop
+
+[Action]
+Description = Applying Aris system identity...
+When = PostTransaction
+Exec = /usr/share/libalpm/scripts/aris-os-release

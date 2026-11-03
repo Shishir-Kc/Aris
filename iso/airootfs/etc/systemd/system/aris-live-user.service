@@ -1,0 +1,13 @@
+[Unit]
+Description=Create the Aris live user
+ConditionPathExists=/etc/aris-live
+After=systemd-sysusers.service
+Before=display-manager.service greetd.service systemd-user-sessions.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/aris-live-setup
+
+[Install]
+WantedBy=multi-user.target

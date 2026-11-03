@@ -1,0 +1,5 @@
+#!/bin/sh
+# Install the Aris os-release and console banner. Idempotent.
+set -e
+install -m644 /usr/lib/aris/os-release /usr/lib/os-release
+printf 'Aris \\r (\\l)\n\n' > /etc/issue
