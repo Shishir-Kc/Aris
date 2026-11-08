@@ -1,7 +1,3 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # aris-clipboard — pick an entry from clipboard history (SUPER + SHIFT + V).
-set -euo pipefail
-
-entry="$(cliphist list | fuzzel --dmenu --prompt "Clipboard ❯ " --width 60 --lines 12)" || exit 0
-[[ -n $entry ]] || exit 0
-printf '%s' "$entry" | cliphist decode | wl-copy
+exec aris-menu clipboard

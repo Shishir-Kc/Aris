@@ -38,7 +38,7 @@ M.defaults = {
   terminal = "kitty",
   browser = "firefox",
   file_manager = "thunar",
-  launcher = "fuzzel",
+  launcher = "aris-menu apps",
   -- Set to false to skip every Aris keybinding and define your own.
   default_binds = true,
   -- Keyboard: left unset, the system layout chosen at install time is used

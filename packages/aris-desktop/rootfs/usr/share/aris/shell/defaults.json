@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "bar": {
+    "position": "top",
+    "size": 20,
+    "transparent": true,
+    "layout": {
+      "left": [
+        { "id": "workspaces" }
+      ],
+      "center": [],
+      "right": [
+        { "id": "tray" },
+        { "id": "bluetooth" },
+        { "id": "indicators" },
+        { "id": "keyboard-layout" },
+        {
+          "id": "clock",
+          "format": "dddd HH:mm",
+          "formatAlt": "d MMMM 'W'ww yyyy"
+        },
+        {
+          "id": "world-clock",
+          "cities": [
+            { "name": "Kathmandu", "zone": "Asia/Kathmandu" },
+            { "name": "New York", "zone": "America/New_York" },
+            { "name": "San Francisco", "zone": "America/Los_Angeles" }
+          ]
+        },
+        { "id": "weather", "location": "" },
+        { "id": "system-update" },
+        { "id": "network" },
+        { "id": "audio" },
+        { "id": "brightness" },
+        { "id": "power", "showPercentage": false }
+      ]
+    }
+  },
+  "notifications": {
+    "timeout": 5000,
+    "maxVisible": 5
+  },
+  "launcher": {
+    "terminal": "kitty"
+  }
+}

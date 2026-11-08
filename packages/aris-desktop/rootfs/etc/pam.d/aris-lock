@@ -1,0 +1,3 @@
+#%PAM-1.0
+# Aris lock screen (aris-shell).
+auth       include      login

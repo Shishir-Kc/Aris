@@ -15,7 +15,7 @@ aris.setup({
   terminal = "kitty",
   browser = "firefox",
   file_manager = "thunar",
-  launcher = "fuzzel",
+  launcher = "aris-menu apps",
 
   -- Keyboard defaults to the layout chosen at install time.
   -- kb_layout = "us,de",

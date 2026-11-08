@@ -13,9 +13,9 @@ releases.
 | Area | Choice |
 | --- | --- |
 | Compositor | Hyprland 0.56 with a Lua config; Aris defaults live in `/usr/share/aris/lua` |
-| Session | greetd + tuigreet login; Waybar, mako, fuzzel, swaybg, hyprlock, hypridle |
-| Apps | kitty, Thunar, Firefox, pavucontrol, nm-applet, blueman, btop |
-| Look | Aris palette (iris `#9d8cff` → teal `#5ce1c6`), Inter + JetBrains Mono Nerd Font, adw-gtk3-dark, Papirus |
+| Session | greetd + tuigreet login; **aris-shell** (Quickshell): wallpaper, bar, notifications, OSD, launcher/menus, lock screen; hypridle |
+| Apps | kitty, Thunar, Firefox, pavucontrol, nm-connection-editor, blueman, btop |
+| Look | Aris palette: shades of black (`#0b0b0b`), grey (`#8a8a8a`) and milky white (`#ece8e1`); JetBrains Mono Nerd Font + Inter, adw-gtk3-dark, Papirus |
 | System | PipeWire, NetworkManager, BlueZ, power-profiles-daemon, zram swap |
 | Install | GPT, Btrfs (`@ @home @log @pkg @snapshots`, zstd) or ext4, optional LUKS2, systemd-boot (UEFI) or GRUB (BIOS) |
 
@@ -43,9 +43,16 @@ scripts/             build, VM, test and check tooling
   Arch plus one package that pacman manages and can upgrade.
 - **Defaults vs. your settings.** Package-owned defaults sit in
   `/usr/share/aris`. Each user gets thin files in `~/.config` that include
-  those defaults (Hyprland `require`/`dofile`, Waybar `include`, kitty,
-  fuzzel and mako `include`, hyprlock/hypridle `source`). Updates improve
-  the defaults without touching your edits.
+  those defaults (Hyprland `require`/`dofile`, kitty `include`, hypridle
+  `source`), and `~/.config/aris/shell.json` overrides the shell's
+  `defaults.json` section by section. Updates improve the defaults without
+  touching your edits.
+- **The shell.** `aris-shell` is one Quickshell process
+  (`/usr/share/aris/shell`) drawing the wallpaper, bar, notifications,
+  volume/brightness OSD, launcher and menus, and the PAM lock screen. The bar
+  layout lives in `shell.json` (`bar.layout.left/center/right`, widget ids
+  such as `workspaces`, `clock`, `network`, `audio`, `power`).
+  `aris-shell ipc show` lists everything scripts and keybindings can call.
 - **Identity.** A pacman hook re-applies the Aris `os-release` whenever the
   `filesystem` package is upgraded.
 - **Keyboard.** The installer writes the standard

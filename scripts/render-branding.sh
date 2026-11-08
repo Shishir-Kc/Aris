@@ -17,7 +17,7 @@ install -m644 "$brand/aris-logo.svg" "$desktop/icons/hicolor/scalable/apps/aris.
 install -m644 "$brand/aris-logo.svg" "$desktop/pixmaps/aris.svg"
 rsvg-convert -w 256 -h 256 "$brand/aris-logo.svg" -o "$desktop/pixmaps/aris.png"
 
-# Default wallpaper. 4K source keeps it sharp on HiDPI; swaybg scales down.
+# Default wallpaper. 4K source keeps it sharp on HiDPI; the shell scales down.
 rsvg-convert -w 3840 -h 2160 "$brand/wallpaper.svg" -o "$desktop/aris/wallpapers/aris-default.png"
 
 # Syslinux needs a 640x480 PNG for its vesamenu background.

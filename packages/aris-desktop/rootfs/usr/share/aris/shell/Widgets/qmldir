@@ -1,0 +1,10 @@
+module qs.Widgets
+Glyph 1.0 Glyph.qml
+Label 1.0 Label.qml
+BarButton 1.0 BarButton.qml
+Popout 1.0 Popout.qml
+PanelHeader 1.0 PanelHeader.qml
+ListRow 1.0 ListRow.qml
+Slider 1.0 Slider.qml
+Switch 1.0 Switch.qml
+TextButton 1.0 TextButton.qml

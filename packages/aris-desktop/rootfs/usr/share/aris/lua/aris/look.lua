@@ -1,4 +1,4 @@
--- Look and feel: the Aris palette (iris violet → teal) on a quiet dark base.
+-- Look and feel: the Aris palette — shades of black and grey, milky white accent.
 return function(_, _)
   hl.config({
     general = {
@@ -6,8 +6,8 @@ return function(_, _)
       gaps_out = 10,
       border_size = 2,
       col = {
-        active_border = { colors = { "rgba(9d8cffee)", "rgba(5ce1c6ee)" }, angle = 45 },
-        inactive_border = "rgba(2a2e3dcc)",
+        active_border = { colors = { "rgba(ece8e1ee)", "rgba(8a8a8aee)" }, angle = 45 },
+        inactive_border = "rgba(2a2a2acc)",
       },
       resize_on_border = true,
       allow_tearing = false,
@@ -54,7 +54,9 @@ return function(_, _)
       focus_on_activate = true,
       key_press_enables_dpms = true,
       mouse_move_enables_dpms = true,
-      background_color = 0xff0d0f14,
+      background_color = 0xff0b0b0b,
+      -- Let a restarted aris-shell take over a lock screen whose shell crashed.
+      allow_session_lock_restore = true,
     },
   })
 
