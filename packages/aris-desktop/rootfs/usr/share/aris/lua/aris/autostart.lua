@@ -6,10 +6,8 @@ return function(aris, _)
     hl.exec_cmd("dbus-update-activation-environment --systemd --all")
 
     hl.exec_cmd("systemctl --user start hyprpolkitagent.service")
-    hl.exec_cmd("aris-wallpaper restore")
-    hl.exec_cmd("waybar")
-    hl.exec_cmd("mako")
-    hl.exec_cmd("nm-applet --indicator")
+    -- Wallpaper, bar, notifications, OSD, launcher and lock screen.
+    hl.exec_cmd("aris-shell")
     hl.exec_cmd("wl-paste --type text --watch cliphist store")
     hl.exec_cmd("wl-paste --type image --watch cliphist store")
 
