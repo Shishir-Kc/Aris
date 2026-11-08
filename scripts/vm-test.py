@@ -5,7 +5,8 @@ Phase 1  Boot the ISO (direct kernel boot, so the serial console is live),
          check that the live Hyprland desktop came up, screenshot it, then run
          an unattended `aris-install` onto a blank virtual disk.
 Phase 2  Boot the installed disk, screenshot the login screen, log in with the
-         virtual keyboard, screenshot the desktop and check its services.
+         virtual keyboard, screenshot the desktop, lock and unlock it with the
+         Aris lock screen, and check its services.
 
 Guest commands run through the QEMU guest agent; screenshots and keystrokes go
 through QMP. Results (PNGs, logs, diagnostics) land in build/vm-test/<name>/.
@@ -256,7 +257,7 @@ DIAG = [
     ("failed units", "systemctl --failed --no-legend --plain || true"),
     ("greetd", "systemctl is-active greetd"),
     ("NetworkManager", "systemctl is-active NetworkManager"),
-    ("session processes", "pgrep -a -x 'Hyprland|waybar|mako|swaybg|hyprpolkitagent|nm-applet' || true"),
+    ("session processes", "pgrep -a -x 'Hyprland|quickshell|qs|hypridle|hyprpolkitagent' || true"),
 ]
 
 
@@ -276,6 +277,26 @@ def diagnostics(vm, uid, path):
     return "\n".join(lines)
 
 
+def wait_for_shell(vm, uid):
+    """aris-shell is up once its bar layer exists."""
+    wait_until("aris-shell bar",
+               lambda: "aris-bar" in vm.agent.sh(as_user(uid, "hyprctl layers -j"))[1], 90)
+
+
+def check_lock_screen(vm, work, uid):
+    """Lock through aris-shell, then unlock by typing the password (real PAM)."""
+    def locked():
+        return vm.agent.sh(as_user(uid, "aris-shell ipc call lock isLocked"))[1].strip()
+
+    vm.agent.sh(as_user(uid, "aris-lock --now"))
+    wait_until("lock screen", lambda: locked() == "true", 30)
+    time.sleep(3)
+    vm.qmp.screenshot(work / "4-locked.png")
+    vm.qmp.type(PASSWORD + "\n")
+    wait_until("unlock with password", lambda: locked() == "false", 30)
+    log("lock screen locked and unlocked through PAM")
+
+
 def phase_live(work, args):
     log("Phase 1: live medium")
     stage = work / "iso"
@@ -293,7 +314,8 @@ def phase_live(work, args):
         log("guest agent up")
         wait_until("live Hyprland session", lambda: vm.agent.sh("pgrep -x Hyprland")[0] == 0, 180)
         log("Hyprland running; letting the desktop settle")
-        time.sleep(12)
+        wait_for_shell(vm, 1000)
+        time.sleep(8)
         vm.qmp.screenshot(work / "1-live-desktop.png")
         diagnostics(vm, 1000, work / "1-live-diagnostics.txt")
         if args.skip_install:
@@ -355,8 +377,10 @@ def phase_installed(work, args):
         vm.qmp.type(PASSWORD + "\n")
         log("typed credentials into tuigreet")
         wait_until("Hyprland after login", lambda: vm.agent.sh("pgrep -x Hyprland")[0] == 0, 90)
-        time.sleep(12)
+        wait_for_shell(vm, 1000)
+        time.sleep(8)
         vm.qmp.screenshot(work / "3-installed-desktop.png")
+        check_lock_screen(vm, work, 1000)
 
         report = diagnostics(vm, 1000, work / "3-installed-diagnostics.txt")
         extra = [
