@@ -1,7 +1,18 @@
 #!/bin/sh
-# aris-lock — lock the session. Goes through logind when hypridle is running
-# so "before lock" hooks fire; otherwise starts hyprlock directly.
-if pidof hypridle >/dev/null 2>&1; then
+# aris-lock [--now] — lock the session with the Aris lock screen.
+#
+# Without --now it goes through logind when hypridle is running, so
+# "before lock" hooks fire; hypridle then calls `aris-lock --now`.
+
+# The live user has no password, so a lock screen could never be unlocked.
+[ -e /etc/aris-live ] && exit 0
+
+if [ "${1:-}" != --now ] && pidof hypridle >/dev/null 2>&1; then
   exec loginctl lock-session
 fi
-pidof hyprlock >/dev/null 2>&1 || exec hyprlock
+
+if ! aris-shell ipc call lock lock >/dev/null 2>&1; then
+  notify-send -u critical -a Aris "Couldn't lock the screen" \
+    "The Aris shell isn't running. Start it with: aris-shell restart"
+  exit 1
+fi
