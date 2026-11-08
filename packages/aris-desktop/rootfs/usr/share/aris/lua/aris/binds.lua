@@ -79,8 +79,9 @@ return function(aris, o)
   bind(SUPER .. " + Escape", run("aris-menu power"), "Power menu")
   bind(SUPER .. " + slash", run("aris-keybinds"), "Show keybindings")
   bind(SUPER .. " + SHIFT + V", run("aris-clipboard"), "Clipboard history")
-  bind(SUPER .. " + N", run("makoctl dismiss --all"), "Dismiss notifications")
-  bind(SUPER .. " + SHIFT + N", run("makoctl restore"), "Restore last notification")
+  bind(SUPER .. " + N", run("aris-shell ipc call notifications hideAll"), "Dismiss notifications")
+  bind(SUPER .. " + SHIFT + N", run("aris-shell ipc call notifications restore"), "Restore last notification")
+  bind(SUPER .. " + CTRL + N", run("aris-shell ipc call notifications toggleDnd"), "Toggle do not disturb")
   bind(SUPER .. " + SHIFT + R", run("hyprctl reload"), "Reload Hyprland config")
 
   bind("Print", run("aris-screenshot region"), "Screenshot region")
@@ -101,8 +102,9 @@ return function(aris, o)
   bind("XF86AudioLowerVolume", run("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"), "Volume down", hw)
   bind("XF86AudioMute", run("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"), "Mute", { locked = true })
   bind("XF86AudioMicMute", run("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"), "Mute microphone", { locked = true })
-  bind("XF86MonBrightnessUp", run("brightnessctl -e4 -n2 set 5%+"), "Brightness up", hw)
-  bind("XF86MonBrightnessDown", run("brightnessctl -e4 -n2 set 5%-"), "Brightness down", hw)
+  local osd = " && aris-shell ipc call osd brightness"
+  bind("XF86MonBrightnessUp", run("brightnessctl -q -e4 -n2 set 5%+" .. osd), "Brightness up", hw)
+  bind("XF86MonBrightnessDown", run("brightnessctl -q -e4 -n2 set 5%-" .. osd), "Brightness down", hw)
 
   local media = { locked = true }
   bind("XF86AudioNext", run("playerctl next"), "Next track", media)
