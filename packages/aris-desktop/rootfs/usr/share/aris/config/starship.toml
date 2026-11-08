@@ -3,21 +3,21 @@ add_newline = false
 format = "$directory$git_branch$git_status$python$nodejs$rust$cmd_duration$line_break$character"
 
 [character]
-success_symbol = "[❯](bold #9d8cff)"
-error_symbol = "[❯](bold #ff6b81)"
+success_symbol = "[❯](bold #ece8e1)"
+error_symbol = "[❯](bold #c98a84)"
 
 [directory]
-style = "bold #5ce1c6"
+style = "bold #ece8e1"
 truncation_length = 3
 truncate_to_repo = true
 
 [git_branch]
-style = "#9d8cff"
+style = "#bcb8b0"
 format = "[$symbol$branch]($style) "
 
 [git_status]
-style = "#f5c26b"
+style = "#8a8a8a"
 
 [cmd_duration]
-style = "#8a91a5"
+style = "#8a8a8a"
 format = "[$duration]($style) "
