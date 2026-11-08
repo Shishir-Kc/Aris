@@ -7,7 +7,7 @@
 pkgname=aris-desktop
 pkgver=0.1.0
 pkgrel=1
-pkgdesc="Aris desktop: Hyprland session defaults, branding and tools"
+pkgdesc="Aris desktop: Hyprland session defaults, Quickshell shell, branding and tools"
 arch=('any')
 url="https://github.com/Shishir-Kc/Aris"
 license=('LicenseRef-unspecified')
@@ -15,10 +15,10 @@ install=aris-desktop.install
 depends=(
   # Compositor and session
   'hyprland' 'xdg-desktop-portal-hyprland' 'xdg-desktop-portal-gtk'
-  'hyprpolkitagent' 'hyprlock' 'hypridle' 'qt5-wayland' 'qt6-wayland'
+  'hyprpolkitagent' 'hypridle' 'qt5-wayland' 'qt6-wayland'
   'greetd' 'greetd-tuigreet'
-  # Shell: bar, notifications, launcher, wallpaper
-  'waybar' 'mako' 'libnotify' 'fuzzel' 'swaybg'
+  # Shell (aris-shell): wallpaper, bar, notifications, OSD, launcher, lock
+  'quickshell' 'upower' 'libnotify' 'curl' 'pacman-contrib'
   # Core apps
   'kitty' 'thunar' 'gvfs' 'tumbler'
   # Screenshots and clipboard
@@ -42,7 +42,7 @@ optdepends=(
   'gnome-keyring: secret storage for browsers and editors'
   'noto-fonts-cjk: Chinese, Japanese and Korean glyphs'
 )
-backup=('etc/systemd/zram-generator.conf')
+backup=('etc/systemd/zram-generator.conf' 'etc/pam.d/aris-lock')
 
 package() {
   cp -r --no-preserve=ownership,mode "$startdir/rootfs/." "$pkgdir/"
