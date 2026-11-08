@@ -54,16 +54,16 @@ MOUNTED=0
 log() { printf '[%(%F %T)T] %s\n' -1 "$*" >>"$LOG"; }
 step() {
   printf '\n' >&2
-  gum style --bold --foreground "#9d8cff" "==> $*" >&2
+  gum style --bold --foreground "#ece8e1" "==> $*" >&2
   log "==> $*"
 }
-info() { gum style --foreground "#5ce1c6" "    $*" >&2; }
+info() { gum style --foreground "#bcb8b0" "    $*" >&2; }
 warn() {
-  gum style --foreground "#f5c26b" "    ! $*" >&2
+  gum style --foreground "#cdbb94" "    ! $*" >&2
   log "WARN: $*"
 }
 die() {
-  gum style --bold --foreground "#ff6b81" "    ✗ $*" >&2
+  gum style --bold --foreground "#c98a84" "    ✗ $*" >&2
   log "ERROR: $*"
   exit 1
 }
@@ -81,8 +81,8 @@ in_target() {
 }
 
 banner() {
-  gum style --border rounded --border-foreground "#9d8cff" --padding "1 4" --margin "1 2" \
-    --align center "$(gum style --bold --foreground "#9d8cff" '✦  A R I S')" \
+  gum style --border rounded --border-foreground "#ece8e1" --padding "1 4" --margin "1 2" \
+    --align center "$(gum style --bold --foreground "#ece8e1" '✦  A R I S')" \
     "" "Installer $VERSION" >&2
 }
 
@@ -103,12 +103,12 @@ on_error() {
   if [[ $PHASE == questions ]]; then
     # A prompt was cancelled (Esc / Ctrl+C) before any disk was touched.
     printf '\n' >&2
-    gum style --foreground "#f5c26b" "Installation cancelled. Nothing was changed." >&2
+    gum style --foreground "#cdbb94" "Installation cancelled. Nothing was changed." >&2
     exit 130
   fi
   log "FAILED (exit $code) at line $line"
   printf '\n' >&2
-  gum style --bold --foreground "#ff6b81" "Installation failed (exit $code, line $line). Last log lines:" >&2
+  gum style --bold --foreground "#c98a84" "Installation failed (exit $code, line $line). Last log lines:" >&2
   tail -n 25 "$LOG" >&2 || true
   printf '\nFull log: %s\n' "$LOG" >&2
   exit "$code"
@@ -367,8 +367,8 @@ ask_nvidia() {
 confirm_plan() {
   local enc="no"
   [[ $ARIS_ENCRYPT == yes ]] && enc="yes (LUKS2)"
-  gum style --border rounded --border-foreground "#2a2e3d" --padding "1 3" --margin "1 2" \
-    "$(gum style --bold --foreground "#9d8cff" "Ready to install")" "" \
+  gum style --border rounded --border-foreground "#2a2a2a" --padding "1 3" --margin "1 2" \
+    "$(gum style --bold --foreground "#ece8e1" "Ready to install")" "" \
     "Disk         $ARIS_DISK  ($(lsblk -dno SIZE "$ARIS_DISK" | tr -d ' '))" \
     "Firmware     ${FIRMWARE^^}" \
     "Filesystem   $ARIS_FS" \
@@ -378,7 +378,7 @@ confirm_plan() {
     "Time zone    $ARIS_TIMEZONE" \
     "Locale       $ARIS_LOCALE" \
     "Keyboard     $ARIS_XKB_LAYOUT${ARIS_XKB_VARIANT:+ ($ARIS_XKB_VARIANT)}" >&2
-  gum style --bold --foreground "#ff6b81" --margin "0 2" \
+  gum style --bold --foreground "#c98a84" --margin "0 2" \
     "Everything on $ARIS_DISK will be permanently erased." >&2
   ((ASSUME_YES)) && return
   ((UNATTENDED)) && die "Unattended install needs --yes to erase $ARIS_DISK."
@@ -723,8 +723,8 @@ finish() {
   MOUNTED=0
   [[ -e /dev/mapper/$CRYPT_NAME ]] && run cryptsetup close "$CRYPT_NAME"
 
-  gum style --border rounded --border-foreground "#5ce1c6" --padding "1 4" --margin "1 2" --align center \
-    "$(gum style --bold --foreground "#5ce1c6" "Aris is installed")" "" \
+  gum style --border rounded --border-foreground "#bcb8b0" --padding "1 4" --margin "1 2" --align center \
+    "$(gum style --bold --foreground "#bcb8b0" "Aris is installed")" "" \
     "Remove the installation medium, then reboot." \
     "Log in as $ARIS_USER." >&2
   log "Installation complete."
