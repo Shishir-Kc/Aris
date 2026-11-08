@@ -9,7 +9,7 @@ touch -- "$marker"
 
 xdg-user-dirs-update >/dev/null 2>&1 || true
 
-sleep 2 # let mako come up
+sleep 2 # let the shell's notification server come up
 notify-send --icon aris --app-name Aris "Welcome to Aris" \
   "SUPER + Space opens apps, SUPER + Return a terminal.
 SUPER + / lists every keybinding."
