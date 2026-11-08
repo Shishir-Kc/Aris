@@ -12,8 +12,8 @@ fi
 
 banner() {
   clear
-  gum style --border rounded --border-foreground "#9d8cff" --padding "1 4" --margin "1 2" --align center \
-    "$(gum style --bold --foreground "#9d8cff" '✦  Welcome to Aris')" "" \
+  gum style --border rounded --border-foreground "#ece8e1" --padding "1 4" --margin "1 2" --align center \
+    "$(gum style --bold --foreground "#ece8e1" '✦  Welcome to Aris')" "" \
     "This is the live session: nothing is installed yet." \
     "Try things out, then install when you're ready."
 }
@@ -40,7 +40,7 @@ Section "InputClass"
 EndSection
 EOF
   hyprctl reload >/dev/null
-  gum style --foreground "#5ce1c6" --margin "0 2" "Keyboard layout set to $layout."
+  gum style --foreground "#bcb8b0" --margin "0 2" "Keyboard layout set to $layout."
   sleep 1
 }
 
