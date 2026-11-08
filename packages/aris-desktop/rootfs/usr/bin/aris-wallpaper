@@ -1,19 +1,17 @@
 #!/usr/bin/env bash
-# aris-wallpaper [restore | <image>] — set the desktop wallpaper and remember it.
+# aris-wallpaper [<image>] — set the desktop and lock-screen wallpaper.
+# With no argument, re-applies the current one. The choice is a symlink at
+# ~/.config/aris/wallpaper that the Aris shell reads.
 set -euo pipefail
 
 state="${XDG_CONFIG_HOME:-$HOME/.config}/aris/wallpaper"
-default=/usr/share/aris/wallpapers/aris-default.png
 
-case "${1:-restore}" in
+case "${1:-}" in
   -h | --help)
-    echo "usage: aris-wallpaper [restore | <image>]"
+    echo "usage: aris-wallpaper [<image>]"
     exit 0
     ;;
-  restore)
-    image="$(readlink -f -- "$state" 2>/dev/null || true)"
-    [[ -n $image && -f $image ]] || image="$default"
-    ;;
+  "" | restore) ;;
   *)
     image="$(realpath -- "$1")"
     [[ -f $image ]] || { echo "aris-wallpaper: no such file: $1" >&2; exit 1; }
@@ -22,5 +20,4 @@ case "${1:-restore}" in
     ;;
 esac
 
-pkill -x swaybg 2>/dev/null || true
-setsid -f swaybg --mode fill --image "$image" >/dev/null 2>&1
+aris-shell ipc call wallpaper reload >/dev/null 2>&1 || true
