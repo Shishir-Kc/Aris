@@ -59,8 +59,11 @@ return function(_, _)
     keep_aspect_ratio = true,
   })
 
-  -- Blur behind the launcher and notifications.
-  hl.layer_rule({ name = "aris-blur-launcher", match = { namespace = "^launcher$" }, blur = true, ignore_alpha = 0.2 })
-  hl.layer_rule({ name = "aris-blur-notifications", match = { namespace = "^notifications$" }, blur = true, ignore_alpha = 0.2 })
-  hl.layer_rule({ name = "aris-blur-bar", match = { namespace = "^waybar$" }, blur = true, ignore_alpha = 0.2 })
+  -- Blur behind the shell's surfaces (aris-shell layer namespaces).
+  hl.layer_rule({
+    name = "aris-blur-shell",
+    match = { namespace = "^aris-(bar|launcher|notifications|osd)$" },
+    blur = true,
+    ignore_alpha = 0.2,
+  })
 end
