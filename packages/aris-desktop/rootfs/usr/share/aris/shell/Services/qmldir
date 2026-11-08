@@ -1,0 +1,7 @@
+module qs.Services
+singleton Audio 1.0 Audio.qml
+singleton Brightness 1.0 Brightness.qml
+singleton Network 1.0 Network.qml
+singleton Notifs 1.0 Notifs.qml
+singleton Session 1.0 Session.qml
+singleton Weather 1.0 Weather.qml
