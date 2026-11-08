@@ -1,0 +1,28 @@
+#!/bin/sh
+# aris-shell — the Aris desktop shell (Quickshell): wallpaper, bar,
+# notifications, OSD, launcher/menus and lock screen.
+#
+#   aris-shell                 start it (once per session; autostarted)
+#   aris-shell restart         restart the running shell
+#   aris-shell ipc call ...    talk to it, e.g. `aris-shell ipc call launcher toggle`
+#   aris-shell ipc show        list every IPC target and function
+#   aris-shell log             follow its log
+#
+# Settings: ~/.config/aris/shell.json. Point ARIS_SHELL_PATH at a copy of
+# /usr/share/aris/shell to run your own fork of the shell.
+shell="${ARIS_SHELL_PATH:-${ARIS_PATH:-/usr/share/aris}/shell}"
+
+case "${1:-}" in
+  "") exec qs --no-duplicate -p "$shell" ;;
+  restart)
+    qs kill -p "$shell" >/dev/null 2>&1
+    exec setsid -f qs --no-duplicate -p "$shell" >/dev/null 2>&1
+    ;;
+  ipc) shift && exec qs ipc -p "$shell" "$@" ;;
+  log) exec qs log -f -p "$shell" ;;
+  -h | --help) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *)
+    echo "usage: aris-shell [restart | ipc ... | log]" >&2
+    exit 2
+    ;;
+esac
